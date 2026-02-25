@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,10 +14,16 @@ import {
   Database,
   Cloud,
   TestTube2,
-  Cpu
+  Cpu,
+  Copy,
+  Download,
+  Check,
+  AlertCircle,
+  Play
 } from 'lucide-react';
-import type { AnalysisResult, ExtractedSkills, DayPlan, RoundChecklist } from '@/lib/skillExtractor';
-import { getHistoryItem } from '@/lib/storage';
+import type { AnalysisResult, ExtractedSkills, DayPlan, RoundChecklist, SkillConfidence } from '@/lib/skillExtractor';
+import { calculateAdjustedScore } from '@/lib/skillExtractor';
+import { getHistoryItem, updateSkillConfidence } from '@/lib/storage';
 
 const CATEGORY_ICONS = {
   coreCS: Cpu,
@@ -42,6 +48,7 @@ export function Results() {
   const [searchParams] = useSearchParams();
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
   useEffect(() => {
     const loadResult = () => {
@@ -66,6 +73,108 @@ export function Results() {
     loadResult();
   }, [searchParams]);
 
+  const handleSkillToggle = useCallback((skill: string) => {
+    if (!result) return;
+    
+    const currentConfidence = result.skillConfidenceMap[skill] || 'practice';
+    const newConfidence: SkillConfidence = currentConfidence === 'know' ? 'practice' : 'know';
+    
+    const newConfidenceMap = {
+      ...result.skillConfidenceMap,
+      [skill]: newConfidence
+    };
+    
+    const newAdjustedScore = calculateAdjustedScore(result.readinessScore, newConfidenceMap);
+    
+    const updatedResult = {
+      ...result,
+      skillConfidenceMap: newConfidenceMap,
+      adjustedReadinessScore: newAdjustedScore
+    };
+    
+    setResult(updatedResult);
+    
+    // Persist to localStorage
+    updateSkillConfidence(result.id, skill, newConfidence, newAdjustedScore);
+    
+    // Update session storage if this is the current analysis
+    const currentData = sessionStorage.getItem('current_analysis');
+    if (currentData) {
+      const current = JSON.parse(currentData);
+      if (current.id === result.id) {
+        sessionStorage.setItem('current_analysis', JSON.stringify(updatedResult));
+      }
+    }
+  }, [result]);
+
+  const copyToClipboard = async (text: string, section: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedSection(section);
+      setTimeout(() => setCopiedSection(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  const generatePlanText = () => {
+    if (!result) return '';
+    return result.plan.map(day => 
+      `Day ${day.day}: ${day.title}\n${day.tasks.map(t => `- ${t}`).join('\n')}`
+    ).join('\n\n');
+  };
+
+  const generateChecklistText = () => {
+    if (!result) return '';
+    return result.checklist.map(round => 
+      `Round ${round.round}: ${round.title}\n${round.items.map(i => `- ${i}`).join('\n')}`
+    ).join('\n\n');
+  };
+
+  const generateQuestionsText = () => {
+    if (!result) return '';
+    return result.questions.map((q, i) => `${i + 1}. ${q}`).join('\n');
+  };
+
+  const generateFullText = () => {
+    if (!result) return '';
+    return `
+Job Analysis for ${result.company} - ${result.role}
+Generated: ${new Date(result.createdAt).toLocaleString()}
+
+=== READINESS SCORE ===
+Base Score: ${result.readinessScore}/100
+Adjusted Score: ${result.adjustedReadinessScore}/100
+
+=== SKILLS EXTRACTED ===
+${Object.entries(result.extractedSkills).map(([cat, skills]: [string, string[]]) => 
+  `${cat}: ${skills.map((s: string) => `${s} (${result.skillConfidenceMap[s] || 'practice'})`).join(', ')}`
+).join('\n')}
+
+=== 7-DAY PLAN ===
+${generatePlanText()}
+
+=== ROUND CHECKLIST ===
+${generateChecklistText()}
+
+=== INTERVIEW QUESTIONS ===
+${generateQuestionsText()}
+    `.trim();
+  };
+
+  const downloadAsTxt = () => {
+    if (!result) return;
+    const blob = new Blob([generateFullText()], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `job-analysis-${result.company}-${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -88,7 +197,14 @@ export function Results() {
     );
   }
 
-  const { company, role, extractedSkills, readinessScore, plan, checklist, questions, createdAt } = result;
+  const { company, role, extractedSkills, readinessScore, adjustedReadinessScore, skillConfidenceMap, plan, checklist, questions, createdAt } = result;
+  const displayScore = adjustedReadinessScore ?? readinessScore;
+  
+  // Get weak skills (marked as practice)
+  const weakSkills = Object.entries(skillConfidenceMap)
+    .filter(([_, confidence]) => confidence === 'practice')
+    .map(([skill]) => skill)
+    .slice(0, 3);
 
   return (
     <div className="space-y-6">
@@ -111,10 +227,22 @@ export function Results() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground">Readiness Score</p>
-              <p className="text-4xl font-bold text-primary">{readinessScore}/100</p>
+              <div className="flex items-baseline gap-2">
+                <p className="text-4xl font-bold text-primary">{displayScore}</p>
+                <span className="text-lg text-muted-foreground">/100</span>
+              </div>
+              {adjustedReadinessScore !== undefined && adjustedReadinessScore !== readinessScore && (
+                <p className="text-xs text-muted-foreground">
+                  Base: {readinessScore} 
+                  {adjustedReadinessScore > readinessScore ? 
+                    <span className="text-green-600"> (+{adjustedReadinessScore - readinessScore})</span> : 
+                    <span className="text-red-600"> ({adjustedReadinessScore - readinessScore})</span>
+                  }
+                </p>
+              )}
               <p className="text-sm text-muted-foreground mt-1">
-                {readinessScore >= 80 ? 'Excellent! You are well prepared.' :
-                 readinessScore >= 60 ? 'Good progress. Keep practicing!' :
+                {displayScore >= 80 ? 'Excellent! You are well prepared.' :
+                 displayScore >= 60 ? 'Good progress. Keep practicing!' :
                  'Needs improvement. Follow the plan below.'}
               </p>
             </div>
@@ -133,7 +261,7 @@ export function Results() {
             Key Skills Extracted
           </CardTitle>
           <CardDescription>
-            Skills detected from the job description
+            Click on each skill to toggle your confidence level. "I know this" adds +2, "Need practice" subtracts -2.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -151,11 +279,32 @@ export function Results() {
                     {CATEGORY_LABELS[category]}
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {skills.map((skill) => (
-                      <Badge key={skill} variant="secondary">
-                        {skill}
-                      </Badge>
-                    ))}
+                    {skills.map((skill) => {
+                      const confidence = skillConfidenceMap[skill] || 'practice';
+                      const isKnown = confidence === 'know';
+                      
+                      return (
+                        <button
+                          key={skill}
+                          onClick={() => handleSkillToggle(skill)}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
+                            isKnown 
+                              ? 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-300' 
+                              : 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-300'
+                          }`}
+                        >
+                          {isKnown ? (
+                            <Check className="w-3 h-3" />
+                          ) : (
+                            <AlertCircle className="w-3 h-3" />
+                          )}
+                          {skill}
+                          <span className="text-[10px] opacity-75">
+                            {isKnown ? '(+2)' : '(-2)'}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -166,14 +315,27 @@ export function Results() {
 
       {/* 7-Day Plan */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-primary" />
-            7-Day Preparation Plan
-          </CardTitle>
-          <CardDescription>
-            Personalized study plan based on detected skills
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-primary" />
+              7-Day Preparation Plan
+            </CardTitle>
+            <CardDescription>
+              Personalized study plan based on detected skills
+            </CardDescription>
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => copyToClipboard(generatePlanText(), 'plan')}
+          >
+            {copiedSection === 'plan' ? (
+              <><Check className="w-4 h-4 mr-2" /> Copied</>
+            ) : (
+              <><Copy className="w-4 h-4 mr-2" /> Copy Plan</>
+            )}
+          </Button>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -201,14 +363,27 @@ export function Results() {
 
       {/* Round-wise Checklist */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-primary" />
-            Round-wise Preparation Checklist
-          </CardTitle>
-          <CardDescription>
-            What to prepare for each interview round
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-primary" />
+              Round-wise Preparation Checklist
+            </CardTitle>
+            <CardDescription>
+              What to prepare for each interview round
+            </CardDescription>
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => copyToClipboard(generateChecklistText(), 'checklist')}
+          >
+            {copiedSection === 'checklist' ? (
+              <><Check className="w-4 h-4 mr-2" /> Copied</>
+            ) : (
+              <><Copy className="w-4 h-4 mr-2" /> Copy Checklist</>
+            )}
+          </Button>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -236,14 +411,27 @@ export function Results() {
 
       {/* Interview Questions */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <HelpCircle className="w-5 h-5 text-primary" />
-            Likely Interview Questions
-          </CardTitle>
-          <CardDescription>
-            Questions based on detected skills
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <HelpCircle className="w-5 h-5 text-primary" />
+              Likely Interview Questions
+            </CardTitle>
+            <CardDescription>
+              Questions based on detected skills
+            </CardDescription>
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => copyToClipboard(generateQuestionsText(), 'questions')}
+          >
+            {copiedSection === 'questions' ? (
+              <><Check className="w-4 h-4 mr-2" /> Copied</>
+            ) : (
+              <><Copy className="w-4 h-4 mr-2" /> Copy Questions</>
+            )}
+          </Button>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -259,13 +447,54 @@ export function Results() {
         </CardContent>
       </Card>
 
-      {/* Action Buttons */}
-      <div className="flex gap-4">
+      {/* Action Next Box */}
+      <Card className="bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-amber-900">
+            <Play className="w-5 h-5" />
+            Action Next
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {weakSkills.length > 0 && (
+            <div>
+              <p className="text-sm font-medium text-amber-800 mb-2">Top skills to focus on:</p>
+              <div className="flex flex-wrap gap-2">
+                {weakSkills.map(skill => (
+                  <Badge key={skill} variant="outline" className="bg-white text-amber-700 border-amber-300">
+                    {skill}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <p className="text-sm text-amber-700">
+                Start with Day 1 of your preparation plan. Focus on the weak areas identified above.
+              </p>
+            </div>
+            <Button 
+              onClick={() => navigate('/practice')} 
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              Start Day 1 Plan
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Export & Action Buttons */}
+      <div className="flex flex-wrap gap-4">
         <Button onClick={() => navigate('/analyze')} variant="outline" className="flex-1">
           Analyze Another JD
         </Button>
-        <Button onClick={() => navigate('/history')} className="flex-1">
+        <Button onClick={() => navigate('/history')} variant="outline" className="flex-1">
           View History
+        </Button>
+        <Button onClick={downloadAsTxt} variant="default" className="flex-1">
+          <Download className="w-4 h-4 mr-2" />
+          Download as TXT
         </Button>
       </div>
     </div>

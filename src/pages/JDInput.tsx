@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Briefcase, Building2, FileText, Sparkles } from 'lucide-react';
-import { extractSkills, generateChecklist, generatePlan, generateQuestions, calculateReadinessScore } from '@/lib/skillExtractor';
+import { extractSkills, generateChecklist, generatePlan, generateQuestions, calculateReadinessScore, createDefaultConfidenceMap } from '@/lib/skillExtractor';
 import { saveToHistory } from '@/lib/storage';
 
 export function JDInput() {
@@ -25,6 +25,7 @@ export function JDInput() {
     await new Promise(resolve => setTimeout(resolve, 500));
 
     const extractedSkills = extractSkills(jdText);
+    const skillConfidenceMap = createDefaultConfidenceMap(extractedSkills);
     const plan = generatePlan(extractedSkills);
     const checklist = generateChecklist(extractedSkills);
     const questions = generateQuestions(extractedSkills);
@@ -37,6 +38,8 @@ export function JDInput() {
       role: role || 'Unknown Role',
       jdText,
       extractedSkills,
+      skillConfidenceMap,
+      adjustedReadinessScore: readinessScore,
       plan,
       checklist,
       questions,

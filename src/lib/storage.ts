@@ -1,4 +1,4 @@
-import type { AnalysisResult } from './skillExtractor';
+import type { AnalysisResult, SkillConfidence } from './skillExtractor';
 
 const STORAGE_KEY = 'placement_readiness_history';
 
@@ -22,6 +22,38 @@ export function saveToHistory(result: AnalysisResult): void {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmedHistory));
   } catch (error) {
     console.error('Error saving to localStorage:', error);
+  }
+}
+
+export function updateHistoryItem(id: string, updates: Partial<AnalysisResult>): void {
+  try {
+    const history = getHistory();
+    const index = history.findIndex(item => item.id === id);
+    if (index !== -1) {
+      history[index] = { ...history[index], ...updates };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+    }
+  } catch (error) {
+    console.error('Error updating history item:', error);
+  }
+}
+
+export function updateSkillConfidence(
+  id: string, 
+  skill: string, 
+  confidence: SkillConfidence,
+  adjustedScore: number
+): void {
+  try {
+    const history = getHistory();
+    const index = history.findIndex(item => item.id === id);
+    if (index !== -1) {
+      history[index].skillConfidenceMap[skill] = confidence;
+      history[index].adjustedReadinessScore = adjustedScore;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+    }
+  } catch (error) {
+    console.error('Error updating skill confidence:', error);
   }
 }
 

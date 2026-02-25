@@ -7,6 +7,8 @@ export interface ExtractedSkills {
   testing: string[];
 }
 
+export type SkillConfidence = 'know' | 'practice';
+
 export interface AnalysisResult {
   id: string;
   createdAt: string;
@@ -14,6 +16,8 @@ export interface AnalysisResult {
   role: string;
   jdText: string;
   extractedSkills: ExtractedSkills;
+  skillConfidenceMap: Record<string, SkillConfidence>;
+  adjustedReadinessScore: number;
   plan: DayPlan[];
   checklist: RoundChecklist[];
   questions: string[];
@@ -322,4 +326,31 @@ export function calculateReadinessScore(
 
   // Cap at 100
   return Math.min(score, 100);
+}
+
+export function calculateAdjustedScore(
+  baseScore: number,
+  skillConfidenceMap: Record<string, SkillConfidence>
+): number {
+  let adjustment = 0;
+  
+  Object.values(skillConfidenceMap).forEach(confidence => {
+    if (confidence === 'know') {
+      adjustment += 2;
+    } else {
+      adjustment -= 2;
+    }
+  });
+  
+  const adjustedScore = baseScore + adjustment;
+  return Math.max(0, Math.min(100, adjustedScore));
+}
+
+export function createDefaultConfidenceMap(skills: ExtractedSkills): Record<string, SkillConfidence> {
+  const allSkills = Object.values(skills).flat();
+  const map: Record<string, SkillConfidence> = {};
+  allSkills.forEach(skill => {
+    map[skill] = 'practice';
+  });
+  return map;
 }
