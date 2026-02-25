@@ -1,8 +1,10 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { LayoutDashboard, BookOpen, ClipboardList, Library, User, GraduationCap } from 'lucide-react';
+import { LayoutDashboard, BookOpen, ClipboardList, Library, User, GraduationCap, Sparkles, History } from 'lucide-react';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/analyze', label: 'Analyze JD', icon: Sparkles },
+  { path: '/history', label: 'History', icon: History },
   { path: '/practice', label: 'Practice', icon: BookOpen },
   { path: '/assessments', label: 'Assessments', icon: ClipboardList },
   { path: '/resources', label: 'Resources', icon: Library },
