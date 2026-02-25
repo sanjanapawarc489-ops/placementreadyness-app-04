@@ -45,11 +45,11 @@ export function Landing() {
       {/* Features Grid */}
       <section className="py-16 px-4 sm:px-6 lg:px-8 flex-1">
         <div className="max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
             {features.map((feature) => (
               <div
                 key={feature.title}
-                className="bg-white border border-gray-200 rounded-xl p-8 hover:shadow-lg transition-shadow duration-200"
+                className="bg-white border border-gray-200 rounded-xl p-8 hover:shadow-lg transition-shadow duration-200 flex flex-col"
               >
                 <div className="w-14 h-14 bg-primary-100 rounded-lg flex items-center justify-center mb-6">
                   <feature.icon className="w-7 h-7 text-primary" />
@@ -57,7 +57,7 @@ export function Landing() {
                 <h3 className="text-xl font-semibold text-gray-900 mb-3">
                   {feature.title}
                 </h3>
-                <p className="text-gray-600 leading-relaxed">
+                <p className="text-gray-600 leading-relaxed flex-1">
                   {feature.description}
                 </p>
               </div>
