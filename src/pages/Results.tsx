@@ -19,7 +19,13 @@ import {
   Download,
   Check,
   AlertCircle,
-  Play
+  Play,
+  Building2,
+  Users,
+  Briefcase,
+  Info,
+  Route,
+  ChevronRight
 } from 'lucide-react';
 import type { AnalysisResult, ExtractedSkills, DayPlan, RoundChecklist, SkillConfidence } from '@/lib/skillExtractor';
 import { calculateAdjustedScore } from '@/lib/skillExtractor';
@@ -197,7 +203,7 @@ ${generateQuestionsText()}
     );
   }
 
-  const { company, role, extractedSkills, readinessScore, adjustedReadinessScore, skillConfidenceMap, plan, checklist, questions, createdAt } = result;
+  const { company, role, extractedSkills, readinessScore, adjustedReadinessScore, skillConfidenceMap, companyIntel, roundMapping, plan, checklist, questions, createdAt } = result;
   const displayScore = adjustedReadinessScore ?? readinessScore;
   
   // Get weak skills (marked as practice)
@@ -205,6 +211,15 @@ ${generateQuestionsText()}
     .filter(([_, confidence]) => confidence === 'practice')
     .map(([skill]) => skill)
     .slice(0, 3);
+  
+  // Get size icon/color
+  const getSizeBadgeStyle = (size: string) => {
+    switch (size) {
+      case 'Enterprise': return 'bg-blue-100 text-blue-700 border-blue-300';
+      case 'Mid-size': return 'bg-purple-100 text-purple-700 border-purple-300';
+      default: return 'bg-green-100 text-green-700 border-green-300';
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -252,6 +267,104 @@ ${generateQuestionsText()}
           </div>
         </CardContent>
       </Card>
+
+      {/* Company Intel */}
+      {companyIntel && (
+        <Card className="border-blue-200">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-blue-600" />
+                Company Intel
+              </CardTitle>
+              <Badge variant="outline" className="text-xs text-muted-foreground">
+                <Info className="w-3 h-3 mr-1" />
+                Demo Mode: Heuristic
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <Briefcase className="w-6 h-6 text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-lg">{companyIntel.name}</h3>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  <Badge variant="outline" className="flex items-center gap-1">
+                    <Building2 className="w-3 h-3" />
+                    {companyIntel.industry}
+                  </Badge>
+                  <Badge variant="outline" className={getSizeBadgeStyle(companyIntel.size)}>
+                    <Users className="w-3 h-3 mr-1" />
+                    {companyIntel.size}
+                    {companyIntel.size === 'Startup' && ' (<200)'}
+                    {companyIntel.size === 'Mid-size' && ' (200-2000)'}
+                    {companyIntel.size === 'Enterprise' && ' (2000+)'}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-blue-50 rounded-lg p-4">
+              <h4 className="font-medium text-blue-900 mb-2 flex items-center gap-2">
+                <Target className="w-4 h-4" />
+                Typical Hiring Focus
+              </h4>
+              <p className="text-sm text-blue-800">{companyIntel.typicalHiringFocus}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Round Mapping */}
+      {roundMapping && roundMapping.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Route className="w-5 h-5 text-primary" />
+              Interview Round Mapping
+            </CardTitle>
+            <CardDescription>
+              Expected interview flow based on company size and detected skills
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="relative">
+              {/* Timeline line */}
+              <div className="absolute left-6 top-4 bottom-4 w-0.5 bg-border" />
+              
+              <div className="space-y-6">
+                {roundMapping.map((round, index) => (
+                  <div key={round.round} className="relative flex gap-4">
+                    {/* Round number bubble */}
+                    <div className="relative z-10 w-12 h-12 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                      <span className="font-bold text-primary-foreground">{round.round}</span>
+                    </div>
+                    
+                    {/* Content */}
+                    <div className="flex-1 pt-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="font-semibold">{round.title}</h4>
+                        {index < roundMapping.length - 1 && (
+                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-2">{round.description}</p>
+                      <div className="bg-muted/50 rounded-lg p-3">
+                        <p className="text-xs text-muted-foreground flex items-start gap-2">
+                          <Info className="w-3 h-3 mt-0.5 flex-shrink-0 text-primary" />
+                          <span><strong>Why it matters:</strong> {round.whyItMatters}</span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Extracted Skills */}
       <Card>

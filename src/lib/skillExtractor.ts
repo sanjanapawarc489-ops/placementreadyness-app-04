@@ -8,6 +8,21 @@ export interface ExtractedSkills {
 }
 
 export type SkillConfidence = 'know' | 'practice';
+export type CompanySize = 'Startup' | 'Mid-size' | 'Enterprise';
+
+export interface CompanyIntel {
+  name: string;
+  industry: string;
+  size: CompanySize;
+  typicalHiringFocus: string;
+}
+
+export interface RoundMapping {
+  round: number;
+  title: string;
+  description: string;
+  whyItMatters: string;
+}
 
 export interface AnalysisResult {
   id: string;
@@ -18,6 +33,8 @@ export interface AnalysisResult {
   extractedSkills: ExtractedSkills;
   skillConfidenceMap: Record<string, SkillConfidence>;
   adjustedReadinessScore: number;
+  companyIntel: CompanyIntel | null;
+  roundMapping: RoundMapping[];
   plan: DayPlan[];
   checklist: RoundChecklist[];
   questions: string[];
@@ -353,4 +370,219 @@ export function createDefaultConfidenceMap(skills: ExtractedSkills): Record<stri
     map[skill] = 'practice';
   });
   return map;
+}
+
+// Known enterprise companies
+const ENTERPRISE_COMPANIES = [
+  'amazon', 'microsoft', 'google', 'apple', 'meta', 'facebook', 'netflix',
+  'oracle', 'ibm', 'sap', 'salesforce', 'adobe', 'intel', 'cisco', 'dell',
+  'hp', 'hewlett packard', 'accenture', 'tcs', 'tata consultancy', 'infosys',
+  'wipro', 'cognizant', 'hcl', 'tech mahindra', 'capgemini', 'deloitte',
+  'ey', 'ernst & young', 'kpmg', 'pwc', 'pricewaterhousecoopers',
+  'jpmorgan', 'jp morgan', 'goldman sachs', 'morgan stanley', 'bank of america',
+  'wells fargo', 'citigroup', 'citi'
+];
+
+// Known mid-size companies
+const MIDSIZE_COMPANIES = [
+  'uber', 'airbnb', 'twitter', 'snap', 'spotify', 'stripe', 'square',
+  'shopify', 'slack', 'zoom', 'dropbox', 'twilio', 'atlassian', 'hubspot',
+  'servicenow', 'workday', 'splunk', 'datadog', 'snowflake', 'databricks'
+];
+
+export function generateCompanyIntel(companyName: string): CompanyIntel | null {
+  if (!companyName.trim()) return null;
+  
+  const nameLower = companyName.toLowerCase();
+  
+  // Determine company size
+  let size: CompanySize = 'Startup';
+  if (ENTERPRISE_COMPANIES.some(c => nameLower.includes(c))) {
+    size = 'Enterprise';
+  } else if (MIDSIZE_COMPANIES.some(c => nameLower.includes(c))) {
+    size = 'Mid-size';
+  }
+  
+  // Infer industry based on keywords
+  let industry = 'Technology Services';
+  if (nameLower.includes('bank') || nameLower.includes('jpmorgan') || nameLower.includes('goldman')) {
+    industry = 'Financial Services';
+  } else if (nameLower.includes('consulting') || nameLower.includes('accenture') || nameLower.includes('deloitte')) {
+    industry = 'Consulting';
+  } else if (nameLower.includes('retail') || nameLower.includes('amazon') || nameLower.includes('walmart')) {
+    industry = 'Retail & E-commerce';
+  } else if (nameLower.includes('health') || nameLower.includes('pharma')) {
+    industry = 'Healthcare';
+  }
+  
+  // Typical hiring focus based on size
+  const typicalHiringFocus = size === 'Enterprise' 
+    ? 'Structured DSA + Core Fundamentals. Heavy emphasis on algorithms, system design, and standardized interview processes.'
+    : size === 'Mid-size'
+    ? 'Balanced approach with DSA fundamentals plus practical implementation skills and product thinking.'
+    : 'Practical problem solving + Stack depth. Focus on immediate contribution, hands-on coding, and versatility.';
+  
+  return {
+    name: companyName,
+    industry,
+    size,
+    typicalHiringFocus
+  };
+}
+
+export function generateRoundMapping(
+  skills: ExtractedSkills,
+  companyIntel: CompanyIntel | null
+): RoundMapping[] {
+  const hasDSA = skills.coreCS.includes('DSA');
+  const hasWeb = skills.web.length > 0;
+  const companySize = companyIntel?.size || 'Startup';
+  
+  // Enterprise with DSA
+  if (companySize === 'Enterprise' && hasDSA) {
+    return [
+      {
+        round: 1,
+        title: 'Online Assessment',
+        description: 'DSA + Aptitude test on HackerRank/Codility platform',
+        whyItMatters: 'Filters 70% of candidates. Tests speed, accuracy, and foundational problem-solving under time pressure.'
+      },
+      {
+        round: 2,
+        title: 'Technical Interview I',
+        description: 'Deep DSA + Core CS fundamentals (OOP, DBMS, OS)',
+        whyItMatters: 'Validates depth of knowledge. Enterprise needs engineers who can handle complex, scalable systems.'
+      },
+      {
+        round: 3,
+        title: 'Technical Interview II',
+        description: 'System design + Projects discussion',
+        whyItMatters: 'Assesses architecture skills. Critical for building and maintaining large-scale enterprise products.'
+      },
+      {
+        round: 4,
+        title: 'Hiring Manager',
+        description: 'Behavioral + Culture fit + Career alignment',
+        whyItMatters: 'Ensures long-term retention. Enterprise invests heavily in onboarding and training.'
+      },
+      {
+        round: 5,
+        title: 'HR Discussion',
+        description: 'Compensation, benefits, and offer negotiation',
+        whyItMatters: 'Final alignment on expectations. Standardized packages with room for negotiation based on performance.'
+      }
+    ];
+  }
+  
+  // Enterprise without DSA focus
+  if (companySize === 'Enterprise' && !hasDSA) {
+    return [
+      {
+        round: 1,
+        title: 'Online Assessment',
+        description: 'Aptitude + Basic programming concepts',
+        whyItMatters: 'Baseline assessment of logical thinking and coding fundamentals.'
+      },
+      {
+        round: 2,
+        title: 'Technical Interview',
+        description: 'Role-specific skills + Core concepts',
+        whyItMatters: 'Validates practical knowledge required for the specific position.'
+      },
+      {
+        round: 3,
+        title: 'Hiring Manager',
+        description: 'Projects + Behavioral discussion',
+        whyItMatters: 'Assesses cultural fit and past experience relevance.'
+      },
+      {
+        round: 4,
+        title: 'HR Discussion',
+        description: 'Offer and compensation',
+        whyItMatters: 'Finalizes employment terms and onboarding details.'
+      }
+    ];
+  }
+  
+  // Startup with Web focus
+  if (companySize === 'Startup' && hasWeb) {
+    return [
+      {
+        round: 1,
+        title: 'Practical Coding',
+        description: 'Live coding session building a small feature',
+        whyItMatters: 'Startups need immediate contributors. Tests real-world coding ability and speed.'
+      },
+      {
+        round: 2,
+        title: 'System Discussion',
+        description: 'Architecture discussion + Previous projects deep dive',
+        whyItMatters: 'Assesses end-to-end thinking. Startups value engineers who can own features independently.'
+      },
+      {
+        round: 3,
+        title: 'Culture & Fit',
+        description: 'Founder/CTO interview + Team collaboration scenarios',
+        whyItMatters: 'Critical for small teams. Cultural alignment drives startup success and retention.'
+      },
+      {
+        round: 4,
+        title: 'Final Discussion',
+        description: 'Role expectations + Equity discussion',
+        whyItMatters: 'Aligns on growth trajectory. Startup compensation often includes equity components.'
+      }
+    ];
+  }
+  
+  // Startup without Web focus (general)
+  if (companySize === 'Startup' && !hasWeb) {
+    return [
+      {
+        round: 1,
+        title: 'Technical Screening',
+        description: 'Problem solving + Core skills assessment',
+        whyItMatters: 'Quick validation of technical competency for fast-moving startups.'
+      },
+      {
+        round: 2,
+        title: 'Deep Dive',
+        description: 'Project discussion + Domain expertise',
+        whyItMatters: 'Assesses depth in relevant areas for immediate impact.'
+      },
+      {
+        round: 3,
+        title: 'Team Fit',
+        description: 'Collaboration scenarios + Culture alignment',
+        whyItMatters: 'Small teams require strong interpersonal dynamics and shared values.'
+      }
+    ];
+  }
+  
+  // Mid-size (balanced approach)
+  return [
+    {
+      round: 1,
+      title: 'Online Test',
+      description: 'DSA + Aptitude screening',
+      whyItMatters: 'Initial filter to manage high application volume efficiently.'
+    },
+    {
+      round: 2,
+      title: 'Technical Interview',
+      description: 'DSA/Problem solving + Practical coding',
+      whyItMatters: 'Balances theoretical knowledge with hands-on implementation skills.'
+    },
+    {
+      round: 3,
+      title: 'System Design',
+      description: 'Architecture discussion + Scalability concepts',
+      whyItMatters: 'Mid-size companies are scaling. Need engineers who can grow with the system.'
+    },
+    {
+      round: 4,
+      title: 'Hiring Manager',
+      description: 'Behavioral + Career goals alignment',
+      whyItMatters: 'Ensures mutual growth trajectory. Mid-size companies invest in long-term potential.'
+    }
+  ];
 }
